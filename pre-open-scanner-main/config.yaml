@@ -1,0 +1,73 @@
+# Pre-Open Scanner - Configuration
+# Edit as needed for your environment.
+
+# Fyers API settings (override with .env for secrets)
+# fyers:
+#   app_id: ""  # Set via FYERS_APP_ID
+#   redirect_uri: ""
+
+# Scanner options
+# scanner:
+#   pre_open_start: "09:00"   # IST
+#   pre_open_end: "09:15"
+#   universe: "nifty500"      # or custom list
+
+# Redis (optional)
+# redis:
+#   url: "redis://localhost:6379/0"
+
+# Logging
+# log_level: "INFO"
+# Scanner Configuration
+scanner:
+  universe: "nifty500"
+  start_time: "09:00"
+  end_time: "09:07"
+  update_interval_seconds: 1  # Tick-level updates
+  dashboard_refresh_seconds: 5  # UI/websocket refresh interval
+  freeze_at: "09:08:00"  # Dashboard freezes and keeps last snapshot after this time
+  mock_mode: false  # Change to false tomorrow morning
+
+storage:
+  snapshot_retention_days: 7
+
+# Fyers WebSocket Settings
+fyers:
+  data_type: "symbolUpdate"  # Full tick data (not lite)
+  symbols_per_connection: 200
+  reconnect_attempts: 3
+  reconnect_delay_seconds: 5
+
+# Data Quality
+data_quality:
+  max_stale_seconds: 10
+  alert_on_disconnect: true
+
+# CORS (update after frontend deployment)
+cors:
+  origins:
+    - "http://localhost:3000"
+    - "http://localhost:5173"
+    - "http://localhost:5174"
+    - "http://localhost:8080"
+    - "http://localhost:8081"
+    - "https://pre-open-scanner.lovable.app"
+    - "https://*.lovable.app"
+
+# Rule-based shortlist configuration
+shortlist_rules:
+  lookback_days: 20
+  mandatory:
+    activity_spike_ratio: 1.5
+    min_abs_gap_pct: 0.5
+  optional:
+    enabled:
+      order_imbalance: true
+      gap_vs_avg: true
+      liquidity_min_avg_daily_volume: false
+    buy_sell_ratio_high: 1.5
+    buy_sell_ratio_low: 0.5
+    gap_vs_avg_multiplier: 1.2
+    liquidity_min_avg_daily_volume: 1000000
+    min_optional_matches: 1
+

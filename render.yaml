@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: market-pulse-backend
+    env: python
+    plan: free
+    rootDir: pre-open-scanner-main
+    buildCommand: pip install -r requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    envVars:
+      - key: CLIENT_USERNAME
+        sync: false
+      - key: CLIENT_PASSWORD
+        sync: false
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        sync: false
+      - key: REDIS_PASSWORD
+        sync: false
+      - key: REDIS_DB
+        sync: false
+      - key: DASHBOARD_REFRESH_SECONDS
+        value: "5"
+      - key: SNAPSHOT_RETENTION_DAYS
+        value: "7"
+      - key: CORS_ORIGINS
+        sync: false
+      - key: CORS_ORIGIN_REGEX
+        value: "https://.*\\.vercel\\.app"

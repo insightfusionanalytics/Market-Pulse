@@ -1,0 +1,24 @@
+# Root workspace ignores
+.venv/
+.DS_Store
+
+# Temporary Office files
+~$*.docx
+*.docx
+
+# Python caches
+**/__pycache__/
+**/*.pyc
+
+# Local environment files
+**/.env
+**/.env.*
+!.env.example
+
+# Build outputs
+**/dist/
+**/.vercel/
+
+# Generated runtime data
+pre-open-scanner-main/backend/data/snapshots/
+pre-open-scanner-main/backend/data/preopen_baseline.json
