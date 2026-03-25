@@ -179,7 +179,8 @@ def evaluate_and_rank(
     for stock in stocks:
         s = dict(stock)
         symbol = (s.get("symbol") or "").strip().upper()
-        baseline = baseline_store.get_baseline(symbol=symbol, exclude_day=day_key)
+        # Include current-day rolling values so averages refresh as new snapshots arrive.
+        baseline = baseline_store.get_baseline(symbol=symbol)
 
         activity_proxy = BaselineStore._activity_proxy(s)
         gap_abs = abs(float(s.get("iep_gap_pct") or 0.0))
