@@ -371,6 +371,7 @@ async def broadcast_loop():
         return "🔴 PRE-OPEN CLOSED"
 
     last_broadcast_key: str | None = None
+    last_snapshot_count: int | None = None
     last_frozen_state: bool | None = None
 
     while True:
@@ -385,10 +386,12 @@ async def broadcast_loop():
             stocks, shortlist, is_frozen, freeze_message = _resolve_dashboard_window(live_stocks, live_shortlist)
             status_info = feed.get_connection_status()
             current_key = status_info.get("last_redis_key")
+            current_snapshot_count = int(status_info.get("snapshot_count") or 0)
 
             key_changed = bool(current_key and current_key != last_broadcast_key)
+            snapshot_changed = last_snapshot_count is None or current_snapshot_count != last_snapshot_count
             freeze_changed = (last_frozen_state is None) or (is_frozen != last_frozen_state)
-            if not key_changed and not freeze_changed:
+            if not snapshot_changed and not freeze_changed:
                 continue
 
             # Stats for cards
@@ -429,6 +432,7 @@ async def broadcast_loop():
 
             if current_key:
                 last_broadcast_key = current_key
+            last_snapshot_count = current_snapshot_count
             last_frozen_state = is_frozen
 
         except asyncio.CancelledError:

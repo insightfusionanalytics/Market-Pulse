@@ -12,6 +12,7 @@ Key facts confirmed from Pradeep Ji:
 import json
 import logging
 import os
+import hashlib
 import threading
 import time
 from datetime import date, datetime, timezone
@@ -194,6 +195,7 @@ class RedisDataFeed:
         self._symbols_subscribed = 0
         self._last_update        = None
         self._last_redis_key     = None
+        self._last_raw_hash      = None
         self._snapshot_count     = 0
         self._stop_event         = threading.Event()
         self._thread             = None
@@ -327,25 +329,29 @@ class RedisDataFeed:
                 latest_key = self._get_latest_key()
                 if latest_key is None:
                     logger.debug("No Redis key for today yet.")
-                elif latest_key != self._last_redis_key:
+                else:
                     raw = self._redis.get(latest_key)
                     if raw:
-                        snapshot = json.loads(raw)
-                        parsed   = _parse_snapshot(snapshot, self._nifty500_set, latest_key)
-                        ts       = datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
-                        is_stale = _is_stale_snapshot(latest_key)
-                        with self._lock:
-                            self._latest_data        = parsed
-                            self._last_redis_key     = latest_key
-                            self._last_update        = ts
-                            self._symbols_subscribed = len(parsed)
-                            self._snapshot_count    += 1
-                        self._persist_parsed_snapshot(latest_key, parsed, ts)
-                        logger.info(
-                            "Snapshot #%d: %s | %d stocks | stale=%s",
-                            self._snapshot_count, latest_key, len(parsed), is_stale
-                        )
-                        self._prune_snapshot_history()
+                        raw_hash = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+                        should_update = latest_key != self._last_redis_key or raw_hash != self._last_raw_hash
+                        if should_update:
+                            snapshot = json.loads(raw)
+                            parsed   = _parse_snapshot(snapshot, self._nifty500_set, latest_key)
+                            ts       = datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
+                            is_stale = _is_stale_snapshot(latest_key)
+                            with self._lock:
+                                self._latest_data        = parsed
+                                self._last_redis_key     = latest_key
+                                self._last_raw_hash      = raw_hash
+                                self._last_update        = ts
+                                self._symbols_subscribed = len(parsed)
+                                self._snapshot_count    += 1
+                            self._persist_parsed_snapshot(latest_key, parsed, ts)
+                            logger.info(
+                                "Snapshot #%d: %s | %d stocks | stale=%s",
+                                self._snapshot_count, latest_key, len(parsed), is_stale
+                            )
+                            self._prune_snapshot_history()
                 try:
                     self._redis.ping()
                 except Exception:

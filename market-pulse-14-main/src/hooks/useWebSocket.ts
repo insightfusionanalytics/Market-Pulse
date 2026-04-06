@@ -17,9 +17,6 @@ export function useWebSocket(enabled: boolean, refreshIntervalSeconds: number) {
   const reconnectCount = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
   const pingTimer = useRef<ReturnType<typeof setInterval>>();
-  const flushTimer = useRef<ReturnType<typeof setInterval>>();
-  const latestMessageRef = useRef<WebSocketMessage | null>(null);
-  const hasInitialAppliedRef = useRef(false);
 
   const applyMessage = useCallback((message: WebSocketMessage) => {
     if (!Array.isArray(message.data)) {
@@ -38,7 +35,6 @@ export function useWebSocket(enabled: boolean, refreshIntervalSeconds: number) {
 
   const cleanup = useCallback(() => {
     if (pingTimer.current) clearInterval(pingTimer.current);
-    if (flushTimer.current) clearInterval(flushTimer.current);
     if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
     if (wsRef.current) {
       wsRef.current.onclose = null; // prevent reconnect on intentional close
@@ -68,13 +64,7 @@ export function useWebSocket(enabled: boolean, refreshIntervalSeconds: number) {
       try {
         const message: WebSocketMessage = JSON.parse(event.data);
         if (message.type === "update" && Array.isArray(message.data)) {
-          const shouldApplyImmediately = !hasInitialAppliedRef.current;
-          latestMessageRef.current = message;
-          if (shouldApplyImmediately) {
-            applyMessage(message);
-            hasInitialAppliedRef.current = true;
-            latestMessageRef.current = null;
-          }
+          applyMessage(message);
         }
       } catch {
         // ignore parse errors
@@ -103,26 +93,6 @@ export function useWebSocket(enabled: boolean, refreshIntervalSeconds: number) {
       setConnected(false);
     };
   }, [cleanup, applyMessage]);
-
-  useEffect(() => {
-    if (flushTimer.current) {
-      clearInterval(flushTimer.current);
-    }
-
-    const ms = Math.max(1, refreshIntervalSeconds) * 1000;
-    flushTimer.current = setInterval(() => {
-      if (latestMessageRef.current) {
-        applyMessage(latestMessageRef.current);
-        latestMessageRef.current = null;
-      }
-    }, ms);
-
-    return () => {
-      if (flushTimer.current) {
-        clearInterval(flushTimer.current);
-      }
-    };
-  }, [refreshIntervalSeconds, applyMessage]);
 
   useEffect(() => {
     if (enabled) {

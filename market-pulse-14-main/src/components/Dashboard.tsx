@@ -251,7 +251,7 @@ export default function Dashboard() {
 
       {/* Footer */}
       <div className="text-center text-muted-foreground text-xs py-2 border-t border-border">
-        NSE Pre-Open Scanner — IFA &nbsp;|&nbsp; Data refreshes every ~30–60 seconds during 9:00–9:07 AM IST
+        NSE Pre-Open Scanner — IFA &nbsp;|&nbsp; Updates reflect incoming snapshots during 9:00–9:07 AM IST
       </div>
     </div>
   );
