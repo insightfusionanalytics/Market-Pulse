@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Dynamic Nifty 500 Symbol Fetcher with Comprehensive Fallback
 Last Updated: Mar 2026

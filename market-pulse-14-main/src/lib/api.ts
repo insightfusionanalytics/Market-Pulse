@@ -48,3 +48,46 @@ export function getWebSocketUrl(): string {
   const token = getToken();
   return `${WS_BASE_URL}/ws/live?token=${encodeURIComponent(token || "")}`;
 }
+
+// ---------------------------------------------------------------------------
+// History API
+// ---------------------------------------------------------------------------
+export async function getHistoryDates(): Promise<{ dates: string[]; count: number }> {
+  const token = getToken();
+  const response = await fetch(`${BASE_URL}/api/history/dates`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error("Failed to fetch history dates");
+  return response.json();
+}
+
+export async function downloadHistoryCSV(dateStr: string): Promise<void> {
+  const token = getToken();
+  const response = await fetch(
+    `${BASE_URL}/api/history/download?date_str=${encodeURIComponent(dateStr)}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: "Download failed" }));
+    throw new Error(err.detail || "Download failed");
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `preopen_snapshot_${dateStr}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function saveSnapshotNow(): Promise<{ status: string; date: string }> {
+  const token = getToken();
+  const response = await fetch(`${BASE_URL}/api/history/save-now`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error("Failed to save snapshot");
+  return response.json();
+}

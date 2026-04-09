@@ -4,6 +4,7 @@ import StockTable from "@/components/StockTable";
 import ShortlistTable from "@/components/ShortlistTable";
 import StatsCards from "@/components/StatsCards";
 import ControlsBar from "@/components/ControlsBar";
+import HistoryPanel from "@/components/HistoryPanel";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { Stock, SortField, StockLimit } from "@/types";
 import { AlertTriangle, Clock } from "lucide-react";
@@ -217,6 +218,11 @@ export default function Dashboard() {
       {/* Client output: simple shortlist table */}
       <div className="px-4 pb-4">
         <ShortlistTable stocks={shortlist} isFrozen={isFrozen} freezeMessage={freezeMessage} />
+      </div>
+
+      {/* History download panel */}
+      <div className="px-4 pb-4">
+        <HistoryPanel />
       </div>
 
       {/* Watchlist info strip — multi-symbol mode only */}

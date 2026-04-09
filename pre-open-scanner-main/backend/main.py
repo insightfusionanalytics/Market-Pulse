@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Pre-Open Scanner - FastAPI application entry point.
 
@@ -6,16 +8,22 @@ Data source: Pradeep Ji's Redis DB (replaces Fyers WebSocket).
 """
 
 import asyncio
+import csv
+import io
+import json
 import logging
 import os
 from datetime import date, datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 import yaml
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 from auth import create_access_token, get_current_user, verify_token
 from redis_feed import RedisDataFeed          # ← replaces FyersDataFeed
@@ -39,6 +47,11 @@ if _CONFIG_PATH.exists():
 def get_config() -> dict:
     return _config
 
+
+_DAILY_FINAL_DIR = _PROJECT_ROOT / "backend" / "data" / "daily_final"
+_DAILY_FINAL_DIR.mkdir(parents=True, exist_ok=True)
+
+_scheduler: AsyncIOScheduler | None = None
 
 _shortlist_rules = merge_rules(_config.get("shortlist_rules", {}))
 _baseline_store = BaselineStore(
@@ -189,8 +202,8 @@ async def api_stocks(
     sort_by: str = "activity_vs_20d",
     order: str = "desc",
     limit: int = 500,
-    search: str | None = None,
-    filter_type: str | None = None,   # "gainers" | "losers" | None
+    search: Optional[str] = None,
+    filter_type: Optional[str] = None,   # "gainers" | "losers" | None
     user: dict = Depends(get_current_user),
 ):
     if feed is None:
@@ -445,7 +458,7 @@ async def broadcast_loop():
 # ---------------------------------------------------------------------------
 @app.on_event("startup")
 async def startup():
-    global feed, _broadcast_task
+    global feed, _broadcast_task, _scheduler
     logger.info("Starting up Pre-Open Scanner v2 (Redis feed)...")
 
     config  = get_config()
@@ -476,11 +489,29 @@ async def startup():
     _broadcast_task = asyncio.create_task(broadcast_loop())
     logger.info("Broadcast task started.")
 
+    # --- APScheduler: save daily final snapshot at 9:10 AM IST ---
+    daily_save_time = str(storage.get("daily_save_time", "09:10"))
+    save_hour, save_minute = (int(x) for x in daily_save_time.split(":"))
+    _scheduler = AsyncIOScheduler(timezone="Asia/Kolkata")
+    _scheduler.add_job(
+        _save_daily_final,
+        trigger="cron",
+        hour=save_hour,
+        minute=save_minute,
+        id="daily_final_save",
+        replace_existing=True,
+    )
+    _scheduler.start()
+    logger.info("APScheduler started: daily save at %s IST", daily_save_time)
+
 
 @app.on_event("shutdown")
 async def shutdown():
-    global feed, _broadcast_task
+    global feed, _broadcast_task, _scheduler
     logger.info("Shutting down...")
+    if _scheduler:
+        _scheduler.shutdown(wait=False)
+        _scheduler = None
     if _broadcast_task and not _broadcast_task.done():
         _broadcast_task.cancel()
         try:
@@ -497,6 +528,115 @@ async def shutdown():
         feed.disconnect()
         feed = None
     logger.info("Shutdown complete.")
+
+# ---------------------------------------------------------------------------
+# Daily final snapshot save (APScheduler job)
+# ---------------------------------------------------------------------------
+CSV_COLUMNS = [
+    "symbol", "iep", "prev_close", "iep_gap_pct", "iep_gap_inr",
+    "buy_qty", "sell_qty", "bs_ratio", "signal", "volume",
+    "alert_level", "phase", "ltp", "proxy_vol",
+    "preopen_activity_metric", "activity_20d_avg", "activity_vs_20d",
+    "qualified", "qualification_reasons",
+]
+
+
+def _save_daily_final():
+    """Save the current frozen/live data as the daily final snapshot."""
+    if feed is None:
+        logger.warning("Daily save skipped: feed not initialized.")
+        return
+
+    data = feed.get_live_data()
+    stocks = list(data.values())
+    if not stocks:
+        logger.warning("Daily save skipped: no stock data available.")
+        return
+
+    stocks, shortlist = _evaluate_stocks(stocks)
+    today_str = date.today().isoformat()
+    payload = {
+        "date": today_str,
+        "saved_at": datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z"),
+        "count": len(stocks),
+        "shortlist_count": len(shortlist),
+        "stocks": stocks,
+        "shortlist": shortlist,
+    }
+    out_path = _DAILY_FINAL_DIR / f"{today_str}.json"
+    try:
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=True)
+        logger.info("Daily final snapshot saved: %s (%d stocks)", out_path.name, len(stocks))
+    except Exception as e:
+        logger.exception("Failed to save daily final snapshot: %s", e)
+
+
+def _stocks_to_csv(stocks: list) -> str:
+    """Convert a list of stock dicts to a CSV string."""
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=CSV_COLUMNS, extrasaction="ignore")
+    writer.writeheader()
+    for stock in stocks:
+        row = dict(stock)
+        reasons = row.get("qualification_reasons")
+        if isinstance(reasons, list):
+            row["qualification_reasons"] = "; ".join(reasons)
+        writer.writerow(row)
+    return output.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# History API (protected)
+# ---------------------------------------------------------------------------
+@app.get("/api/history/dates")
+async def api_history_dates(user: dict = Depends(get_current_user)):
+    """Return list of dates that have saved daily final snapshots."""
+    dates = []
+    for f in sorted(_DAILY_FINAL_DIR.glob("*.json"), reverse=True):
+        dates.append(f.stem)  # "2026-04-09"
+    return {"dates": dates, "count": len(dates)}
+
+
+@app.get("/api/history/download")
+async def api_history_download(
+    date_str: str,
+    user: dict = Depends(get_current_user),
+):
+    """Download a day's final snapshot as CSV."""
+    file_path = _DAILY_FINAL_DIR / f"{date_str}.json"
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"No data found for {date_str}")
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to read snapshot file")
+
+    stocks = payload.get("stocks", [])
+    if not stocks:
+        raise HTTPException(status_code=404, detail=f"No stock data in snapshot for {date_str}")
+
+    csv_content = _stocks_to_csv(stocks)
+    filename = f"preopen_snapshot_{date_str}.csv"
+    return StreamingResponse(
+        io.StringIO(csv_content),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.post("/api/history/save-now")
+async def api_history_save_now(user: dict = Depends(get_current_user)):
+    """Manually trigger saving the current snapshot (for testing)."""
+    _save_daily_final()
+    today_str = date.today().isoformat()
+    file_path = _DAILY_FINAL_DIR / f"{today_str}.json"
+    if file_path.exists():
+        return {"status": "saved", "date": today_str}
+    raise HTTPException(status_code=500, detail="Save failed")
+
 
 # ---------------------------------------------------------------------------
 # Public endpoints

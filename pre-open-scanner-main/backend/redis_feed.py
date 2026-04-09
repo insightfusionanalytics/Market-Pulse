@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Redis Pre-Open Data Feed for NSE Pre-Open Scanner.
 

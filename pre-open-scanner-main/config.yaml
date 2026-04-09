@@ -30,6 +30,7 @@ scanner:
 
 storage:
   snapshot_retention_days: 7
+  daily_save_time: "09:10"  # Auto-save frozen snapshot at this IST time
 
 # Fyers WebSocket Settings
 fyers:
