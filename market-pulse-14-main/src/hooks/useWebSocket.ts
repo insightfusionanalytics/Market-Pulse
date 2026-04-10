@@ -5,6 +5,7 @@ import { Stock, WebSocketMessage } from "@/types";
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_INTERVAL = 5000;
 const PING_INTERVAL = 30000;
+const THROTTLE_MS = 200; // Max 5 UI updates per second
 
 export function useWebSocket(enabled: boolean, refreshIntervalSeconds: number) {
   const [stocks, setStocks] = useState<Stock[]>([]);
@@ -18,10 +19,15 @@ export function useWebSocket(enabled: boolean, refreshIntervalSeconds: number) {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
   const pingTimer = useRef<ReturnType<typeof setInterval>>();
 
-  const applyMessage = useCallback((message: WebSocketMessage) => {
-    if (!Array.isArray(message.data)) {
-      return;
-    }
+  // Throttle: buffer the latest message and flush at most every THROTTLE_MS
+  const pendingMessage = useRef<WebSocketMessage | null>(null);
+  const throttleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushMessage = useCallback(() => {
+    const message = pendingMessage.current;
+    if (!message || !Array.isArray(message.data)) return;
+    pendingMessage.current = null;
+
     setStocks(message.data);
     if (Array.isArray(message.shortlist)) {
       setShortlist(message.shortlist);
@@ -33,11 +39,29 @@ export function useWebSocket(enabled: boolean, refreshIntervalSeconds: number) {
     setLastUpdate(message.timestamp || new Date().toISOString());
   }, []);
 
+  const applyMessage = useCallback((message: WebSocketMessage) => {
+    if (!Array.isArray(message.data)) return;
+    pendingMessage.current = message;
+
+    if (!throttleTimer.current) {
+      // Flush immediately on first message, then throttle subsequent ones
+      flushMessage();
+      throttleTimer.current = setTimeout(() => {
+        throttleTimer.current = null;
+        if (pendingMessage.current) flushMessage();
+      }, THROTTLE_MS);
+    }
+  }, [flushMessage]);
+
   const cleanup = useCallback(() => {
     if (pingTimer.current) clearInterval(pingTimer.current);
     if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    if (throttleTimer.current) {
+      clearTimeout(throttleTimer.current);
+      throttleTimer.current = null;
+    }
     if (wsRef.current) {
-      wsRef.current.onclose = null; // prevent reconnect on intentional close
+      wsRef.current.onclose = null;
       wsRef.current.close();
       wsRef.current = null;
     }
@@ -52,7 +76,6 @@ export function useWebSocket(enabled: boolean, refreshIntervalSeconds: number) {
     ws.onopen = () => {
       setConnected(true);
       reconnectCount.current = 0;
-      // Start ping keepalive
       pingTimer.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: "ping" }));
@@ -75,14 +98,12 @@ export function useWebSocket(enabled: boolean, refreshIntervalSeconds: number) {
       setConnected(false);
       if (pingTimer.current) clearInterval(pingTimer.current);
 
-      // If 401/auth error, redirect to login
       if (event.code === 4001 || event.reason?.includes("auth")) {
         clearToken();
         window.location.href = "/";
         return;
       }
 
-      // Auto-reconnect
       if (reconnectCount.current < MAX_RECONNECT_ATTEMPTS) {
         reconnectCount.current++;
         reconnectTimer.current = setTimeout(connect, RECONNECT_INTERVAL);

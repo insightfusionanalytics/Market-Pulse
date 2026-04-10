@@ -8,62 +8,63 @@ interface ShortlistTableProps {
   freezeMessage: string | null;
 }
 
-export default function ShortlistTable({ stocks, isFrozen, freezeMessage }: ShortlistTableProps) {
+function ShortlistTable({ stocks, isFrozen, freezeMessage }: ShortlistTableProps) {
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-secondary/20">
         <div>
-          <h3 className="text-base font-semibold text-foreground">Rule-Based Shortlist</h3>
-          <p className="text-xs text-muted-foreground">
-            Stock | Pre-open price change | Pre-open activity metric | Comparison vs 20D average
+          <h3 className="text-sm font-semibold text-foreground">Rule-Based Shortlist</h3>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Pre-open change | Activity metric | 20D average comparison
           </p>
         </div>
-        <div className="text-xs">
-          <span className={`px-2 py-1 rounded border ${isFrozen ? "bg-amber-500/10 text-amber-400 border-amber-500/30" : "bg-primary/10 text-primary border-primary/30"}`}>
-            {isFrozen ? "Frozen" : "Live"}
-          </span>
-        </div>
+        <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full border ${
+          isFrozen
+            ? "bg-amber-500/10 text-amber-400 border-amber-500/25"
+            : "bg-success/10 text-success border-success/25"
+        }`}>
+          {isFrozen ? "Frozen" : "Live"}
+        </span>
       </div>
 
       {freezeMessage && (
-        <div className="px-4 py-2 text-xs text-amber-300 bg-amber-900/20 border-b border-amber-700/40">
+        <div className="px-5 py-2 text-xs text-amber-300 bg-amber-900/15 border-b border-amber-700/30">
           {freezeMessage}
         </div>
       )}
 
       {stocks.length === 0 ? (
-        <div className="px-4 py-8 text-sm text-muted-foreground">
+        <div className="px-5 py-8 text-sm text-muted-foreground text-center">
           No shortlisted stocks yet based on current rule thresholds.
         </div>
       ) : (
         <div className="overflow-auto">
           <table className="w-full text-sm">
-            <thead className="bg-secondary/50 border-b border-border">
+            <thead className="bg-secondary/15 border-b border-border">
               <tr>
-                <th className="text-left px-4 py-2 text-xs uppercase tracking-wider text-muted-foreground">Stock</th>
-                <th className="text-right px-4 py-2 text-xs uppercase tracking-wider text-muted-foreground">Pre-open change %</th>
-                <th className="text-right px-4 py-2 text-xs uppercase tracking-wider text-muted-foreground">Activity metric</th>
-                <th className="text-right px-4 py-2 text-xs uppercase tracking-wider text-muted-foreground">20D avg</th>
-                <th className="text-right px-4 py-2 text-xs uppercase tracking-wider text-muted-foreground">Vs 20D</th>
+                <th className="text-left px-4 py-2 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Stock</th>
+                <th className="text-right px-4 py-2 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Change %</th>
+                <th className="text-right px-4 py-2 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Activity</th>
+                <th className="text-right px-4 py-2 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">20D Avg</th>
+                <th className="text-right px-4 py-2 text-[11px] uppercase tracking-wider text-muted-foreground font-medium">Ratio</th>
               </tr>
             </thead>
             <tbody>
-              {stocks.map((s) => {
+              {stocks.map((s, i) => {
                 const change = Number(s.iep_gap_pct || 0);
                 return (
-                  <tr key={s.symbol} className="border-b border-border/50 hover:bg-secondary/30">
+                  <tr key={s.symbol} className={`border-b border-border/40 hover:bg-secondary/30 transition-colors ${i % 2 === 0 ? "bg-secondary/[0.04]" : ""}`}>
                     <td className="px-4 py-2 font-semibold text-foreground">{s.symbol}</td>
-                    <td className={`px-4 py-2 text-right font-mono ${change > 0 ? "text-success" : change < 0 ? "text-destructive" : "text-muted-foreground"}`}>
-                      {change > 0 ? "+" : ""}
-                      {change.toFixed(2)}%
+                    <td className={`px-4 py-2 text-right font-mono tabular-nums font-medium ${change > 0 ? "text-success" : change < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                      {change > 0 ? "+" : ""}{change.toFixed(2)}%
                     </td>
-                    <td className="px-4 py-2 text-right font-mono text-foreground">
+                    <td className="px-4 py-2 text-right font-mono tabular-nums text-foreground">
                       {formatLargeNumber(Number(s.preopen_activity_metric || 0))}
                     </td>
-                    <td className="px-4 py-2 text-right font-mono text-muted-foreground">
+                    <td className="px-4 py-2 text-right font-mono tabular-nums text-muted-foreground">
                       {formatLargeNumber(Number(s.activity_20d_avg || 0))}
                     </td>
-                    <td className="px-4 py-2 text-right font-mono text-primary font-semibold">
+                    <td className="px-4 py-2 text-right font-mono tabular-nums text-primary font-semibold">
                       {(Number(s.activity_vs_20d || 0)).toFixed(2)}x
                     </td>
                   </tr>
@@ -76,3 +77,5 @@ export default function ShortlistTable({ stocks, isFrozen, freezeMessage }: Shor
     </div>
   );
 }
+
+export default React.memo(ShortlistTable);

@@ -4,47 +4,48 @@
 
 @layer base {
   :root {
-    --background: 230 60% 10%;
-    --foreground: 210 40% 98%;
+    /* Bloomberg-style professional dark palette */
+    --background: 220 20% 8%;
+    --foreground: 210 20% 93%;
 
-    --card: 230 40% 14%;
-    --card-foreground: 210 40% 98%;
+    --card: 220 18% 11%;
+    --card-foreground: 210 20% 93%;
 
-    --popover: 230 40% 14%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 220 18% 13%;
+    --popover-foreground: 210 20% 93%;
 
-    --primary: 187 100% 50%;
-    --primary-foreground: 230 60% 10%;
+    --primary: 210 60% 55%;
+    --primary-foreground: 210 20% 98%;
 
-    --secondary: 230 30% 20%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 220 15% 14%;
+    --secondary-foreground: 210 20% 93%;
 
-    --muted: 230 25% 18%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 220 10% 22%;
+    --muted-foreground: 215 15% 55%;
 
-    --accent: 187 100% 50%;
-    --accent-foreground: 230 60% 10%;
+    --accent: 210 45% 45%;
+    --accent-foreground: 210 20% 98%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 210 20% 98%;
 
-    --success: 160 60% 45%;
-    --success-foreground: 210 40% 98%;
+    --success: 152 50% 48%;
+    --success-foreground: 210 20% 98%;
 
-    --border: 230 25% 20%;
-    --input: 230 25% 20%;
-    --ring: 187 100% 50%;
+    --border: 220 12% 18%;
+    --input: 220 12% 18%;
+    --ring: 210 60% 55%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 230 60% 10%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 187 100% 50%;
-    --sidebar-primary-foreground: 230 60% 10%;
-    --sidebar-accent: 230 25% 18%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 230 25% 20%;
-    --sidebar-ring: 187 100% 50%;
+    --sidebar-background: 220 20% 8%;
+    --sidebar-foreground: 210 20% 93%;
+    --sidebar-primary: 210 60% 55%;
+    --sidebar-primary-foreground: 210 20% 98%;
+    --sidebar-accent: 220 10% 22%;
+    --sidebar-accent-foreground: 210 20% 93%;
+    --sidebar-border: 220 12% 18%;
+    --sidebar-ring: 210 60% 55%;
   }
 }
 
@@ -55,5 +56,57 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Tabular numerals for aligned number columns */
+  .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-feature-settings: "tnum" 1;
+  }
+}
+
+@layer utilities {
+  /* Price flash animations */
+  @keyframes flash-green {
+    0% { background-color: hsl(152 50% 48% / 0.2); }
+    100% { background-color: transparent; }
+  }
+  @keyframes flash-red {
+    0% { background-color: hsl(0 62% 55% / 0.2); }
+    100% { background-color: transparent; }
+  }
+  .animate-flash-green {
+    animation: flash-green 1s ease-out;
+  }
+  .animate-flash-red {
+    animation: flash-red 1s ease-out;
+  }
+
+  /* Connection pulse */
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .animate-pulse-dot {
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(220 20% 8%);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(220 12% 22%);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(220 12% 30%);
   }
 }

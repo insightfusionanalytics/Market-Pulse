@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Search, BookMarked, X } from "lucide-react";
+import { Search, BookMarked, X, Download, ArrowUpDown } from "lucide-react";
 import { SortField, SortOrder, StockLimit } from "@/types";
 
 interface ControlsBarProps {
@@ -40,51 +40,54 @@ const ControlsBar: React.FC<ControlsBarProps> = ({
   const symbolCount = searchQuery.trim() ? searchQuery.split(/[,\s]+/).filter((s) => s.trim().length > 0).length : 0;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-card p-4">
-      <div className="flex flex-wrap items-center gap-4">
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-card/80 backdrop-blur-sm px-5 py-3">
+      {/* Left group: Sort & Filter */}
+      <div className="flex flex-wrap items-center gap-3">
         {/* Sort By */}
         <div className="flex items-center gap-2">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">Sort by</Label>
+          <ArrowUpDown size={13} className="text-muted-foreground" />
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortField)}
-            className="h-9 rounded-md border border-border bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-8 rounded-md border border-border bg-secondary/80 px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
           >
-            <option value="iep_gap_pct">IEP Gap %</option>
-            <option value="iep_gap_inr">IEP Gap ₹</option>
-            <option value="iep">IEP Price</option>
+            <option value="iep_gap_pct">Gap %</option>
+            <option value="iep_gap_inr">Gap ₹</option>
+            <option value="iep">IEP</option>
             <option value="bs_ratio">B/S Ratio</option>
             <option value="buy_qty">Buy Qty</option>
             <option value="sell_qty">Sell Qty</option>
-            <option value="volume">Ind. Volume</option>
+            <option value="volume">Volume</option>
           </select>
         </div>
 
-        {/* Order */}
-        <div className="flex items-center gap-2">
-          <Label className="text-xs text-muted-foreground">Order</Label>
-          <div className="flex rounded-md overflow-hidden border border-border">
-            {(["desc", "asc"] as const).map((o) => (
-              <Button
-                key={o}
-                size="sm"
-                variant={sortOrder === o ? "default" : "ghost"}
-                className={`rounded-none text-xs h-9 ${sortOrder === o ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-                onClick={() => setSortOrder(o)}
-              >
-                {o === "desc" ? "Desc" : "Asc"}
-              </Button>
-            ))}
-          </div>
+        {/* Order toggle */}
+        <div className="flex rounded-md overflow-hidden border border-border">
+          {(["desc", "asc"] as const).map((o) => (
+            <button
+              key={o}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                sortOrder === o
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-secondary/50 text-muted-foreground hover:text-foreground hover:bg-secondary"
+              }`}
+              onClick={() => setSortOrder(o)}
+            >
+              {o === "desc" ? "Desc" : "Asc"}
+            </button>
+          ))}
         </div>
 
-        {/* Show */}
+        {/* Divider */}
+        <div className="w-px h-5 bg-border hidden md:block" />
+
+        {/* Show limit */}
         <div className="flex items-center gap-2">
           <Label className="text-xs text-muted-foreground">Show</Label>
           <select
             value={limit}
             onChange={(e) => setLimit(Number(e.target.value) as StockLimit)}
-            className="h-9 rounded-md border border-border bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            className="h-8 rounded-md border border-border bg-secondary/80 px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
           >
             <option value={10}>Top 10</option>
             <option value={25}>Top 25</option>
@@ -94,15 +97,16 @@ const ControlsBar: React.FC<ControlsBarProps> = ({
         </div>
       </div>
 
+      {/* Right group: Search & Actions */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Multi-symbol watchlist search */}
+        {/* Search */}
         <div className="flex items-center gap-2">
           <div className="relative">
             <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
               {symbolCount > 1 ? (
-                <BookMarked className="h-4 w-4 text-primary" />
+                <BookMarked className="h-3.5 w-3.5 text-primary" />
               ) : (
-                <Search className="h-4 w-4 text-muted-foreground" />
+                <Search className="h-3.5 w-3.5 text-muted-foreground" />
               )}
             </div>
             <Input
@@ -110,8 +114,8 @@ const ControlsBar: React.FC<ControlsBarProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Escape" && setSearchQuery("")}
-              className={`pl-9 pr-8 w-56 h-9 bg-secondary border-border text-foreground placeholder:text-muted-foreground transition-colors ${
-                symbolCount > 1 ? "border-primary/60 bg-primary/5" : ""
+              className={`pl-8 pr-7 w-52 h-8 text-xs bg-secondary/80 border-border text-foreground placeholder:text-muted-foreground transition-colors ${
+                symbolCount > 1 ? "border-primary/50 bg-primary/5" : ""
               }`}
             />
             {searchQuery && (
@@ -123,49 +127,49 @@ const ControlsBar: React.FC<ControlsBarProps> = ({
               </button>
             )}
           </div>
-
-          {/* Badge: only shows when 2+ symbols */}
           {symbolCount > 1 && (
-            <div className="flex items-center gap-1 bg-primary/10 border border-primary/30 text-primary text-xs px-2 py-1 rounded-md whitespace-nowrap">
+            <span className="inline-flex items-center gap-1 bg-primary/10 border border-primary/25 text-primary text-xs px-2 py-1 rounded-md whitespace-nowrap font-medium">
               <BookMarked className="h-3 w-3" />
-              <span>{symbolCount} symbols</span>
-            </div>
+              {symbolCount}
+            </span>
           )}
         </div>
 
+        {/* Divider */}
+        <div className="w-px h-5 bg-border hidden md:block" />
+
         {/* Export CSV */}
         {onExportCSV && (
-          <Button onClick={onExportCSV} variant="outline" size="sm" className="h-9">
-            📥 Export CSV
+          <Button onClick={onExportCSV} variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-border">
+            <Download size={13} />
+            CSV
           </Button>
         )}
 
         {/* Auto Refresh */}
         <div className="flex items-center gap-2">
-          <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} className="data-[state=checked]:bg-primary" />
-          <Label className={`text-xs ${autoRefresh ? "text-primary" : "text-muted-foreground"}`}>
-            Auto-refresh {autoRefresh ? "ON" : "OFF"}
+          <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} className="data-[state=checked]:bg-primary scale-90" />
+          <Label className={`text-xs font-medium ${autoRefresh ? "text-primary" : "text-muted-foreground"}`}>
+            {autoRefresh && <span className="inline-block w-1.5 h-1.5 rounded-full bg-success mr-1.5 animate-pulse-dot" />}
+            Auto
           </Label>
         </div>
 
         {/* Refresh Interval */}
-        <div className="flex items-center gap-2">
-          <Label className="text-xs text-muted-foreground">Refresh</Label>
-          <select
-            value={refreshIntervalSeconds}
-            onChange={(e) => setRefreshIntervalSeconds(Number(e.target.value))}
-            className="h-9 rounded-md border border-border bg-secondary px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            disabled={!autoRefresh}
-          >
-            <option value={5}>5 sec</option>
-            <option value={15}>15 sec</option>
-            <option value={30}>30 sec</option>
-            <option value={60}>1 min</option>
-          </select>
-        </div>
+        <select
+          value={refreshIntervalSeconds}
+          onChange={(e) => setRefreshIntervalSeconds(Number(e.target.value))}
+          className="h-8 rounded-md border border-border bg-secondary/80 px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer disabled:opacity-40"
+          disabled={!autoRefresh}
+        >
+          <option value={5}>5s</option>
+          <option value={15}>15s</option>
+          <option value={30}>30s</option>
+          <option value={60}>60s</option>
+        </select>
       </div>
     </div>
   );
 };
 
-export default ControlsBar;
+export default React.memo(ControlsBar);

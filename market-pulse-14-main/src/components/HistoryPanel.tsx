@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { getHistoryDates, downloadHistoryCSV, saveSnapshotNow } from "@/lib/api";
 import { Download, History, Save, ChevronDown, ChevronUp } from "lucide-react";
 
-export default function HistoryPanel() {
+function HistoryPanel() {
   const [isOpen, setIsOpen] = useState(false);
   const [dates, setDates] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -157,3 +157,5 @@ export default function HistoryPanel() {
     </div>
   );
 }
+
+export default React.memo(HistoryPanel);
