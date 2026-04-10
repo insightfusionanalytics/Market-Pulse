@@ -15,7 +15,7 @@ import logging
 import os
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 import yaml
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -30,6 +30,7 @@ from redis_feed import RedisDataFeed          # ← replaces FyersDataFeed
 from models import LoginRequest
 from nifty500 import get_nifty500_symbols
 from shortlist_engine import BaselineStore, evaluate_and_rank, merge_rules
+from historical_volume import get_20d_avg_volumes
 
 # ---------------------------------------------------------------------------
 # Config loading
@@ -60,6 +61,7 @@ _baseline_store = BaselineStore(
 )
 _frozen_shortlist: list[dict] = []
 _frozen_stocks: list[dict] = []
+_hist_volumes: Dict[str, float] = {}
 
 _scanner_cfg = _config.get("scanner", {})
 _preopen_freeze_at = str(_scanner_cfg.get("freeze_at", "09:08:00"))
@@ -74,12 +76,20 @@ if os.getenv("DASHBOARD_REFRESH_SECONDS"):
 
 
 def _evaluate_stocks(stocks: list[dict]) -> tuple[list[dict], list[dict]]:
-    return evaluate_and_rank(
+    enriched, shortlist = evaluate_and_rank(
         stocks=stocks,
         baseline_store=_baseline_store,
         rules=_shortlist_rules,
         now_day=date.today().isoformat(),
     )
+    # Inject real 20-day average market volume from Yahoo Finance
+    if _hist_volumes:
+        for s in enriched:
+            sym = (s.get("symbol") or "").strip().upper()
+            avg_vol = _hist_volumes.get(sym, 0.0)
+            if avg_vol > 0:
+                s["liquidity_20d_avg"] = avg_vol
+    return enriched, shortlist
 
 
 def _resolve_dashboard_window(stocks: list[dict], shortlist: list[dict]) -> tuple[list[dict], list[dict], bool, str | None]:
@@ -485,6 +495,15 @@ async def startup():
         "RedisDataFeed started (mock_mode=%s, symbols=%d)",
         mock_mode, len(symbols)
     )
+
+    # Fetch 20-day average market volumes from Yahoo Finance
+    global _hist_volumes
+    try:
+        _hist_volumes = get_20d_avg_volumes(symbols)
+        logger.info("Loaded 20D avg volumes for %d symbols", len(_hist_volumes))
+    except Exception as e:
+        logger.warning("Failed to load 20D avg volumes: %s", e)
+        _hist_volumes = {}
 
     _broadcast_task = asyncio.create_task(broadcast_loop())
     logger.info("Broadcast task started.")
