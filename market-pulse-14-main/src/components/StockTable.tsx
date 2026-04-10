@@ -4,7 +4,7 @@ import { Stock } from "@/types";
 import { formatCurrency, formatLargeNumber, extractSymbolName } from "@/lib/formatters";
 import { Loader2, ChevronUp, ChevronDown } from "lucide-react";
 
-type SortKey = "iep" | "prev_close" | "iep_gap_inr" | "iep_gap_pct" | "buy_qty" | "sell_qty" | "bs_ratio" | "volume";
+type SortKey = "iep" | "prev_close" | "iep_gap_inr" | "iep_gap_pct" | "buy_qty" | "sell_qty" | "bs_ratio" | "volume" | "liquidity_20d_avg";
 type SortDirection = "asc" | "desc";
 
 interface StockTableProps {
@@ -150,6 +150,13 @@ const StockRow = React.memo(({ stock, rank }: { stock: Stock; rank: number }) =>
         {stock.volume > 0 ? formatLargeNumber(stock.volume) : "–"}
       </td>
 
+      {/* 20D Avg Vol */}
+      <td className="px-3 py-2 font-mono text-muted-foreground text-right text-sm tabular-nums">
+        {stock.liquidity_20d_avg && stock.liquidity_20d_avg > 0
+          ? formatLargeNumber(stock.liquidity_20d_avg)
+          : "–"}
+      </td>
+
       {/* Updated */}
       <td className="px-3 py-2 font-mono text-[11px] text-muted-foreground text-right tabular-nums">
         {stock.last_updated ?? "–"}
@@ -172,6 +179,7 @@ const COLUMNS: { label: string; sortKey: SortKey | null; align: string }[] = [
   { label: "B/S Ratio", sortKey: "bs_ratio", align: "text-right" },
   { label: "Signal", sortKey: null, align: "text-left" },
   { label: "Volume", sortKey: "volume", align: "text-right" },
+  { label: "20D Avg Vol", sortKey: "liquidity_20d_avg", align: "text-right" },
   { label: "Updated", sortKey: null, align: "text-right" },
 ];
 
