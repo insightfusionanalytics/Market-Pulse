@@ -1,0 +1,45 @@
+name: Refresh 20D Avg Volumes
+
+on:
+  schedule:
+    # Every Monday at 5:30 AM IST (00:00 UTC) — before market opens
+    - cron: '0 0 * * 1'
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install yfinance
+        run: pip install yfinance
+
+      - name: Fetch fresh 20D avg volumes
+        working-directory: pre-open-scanner-main
+        run: python backend/historical_volume.py
+
+      - name: Check for changes
+        id: changes
+        working-directory: pre-open-scanner-main
+        run: |
+          if git diff --quiet backend/data/avg_volume_20d.json 2>/dev/null; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f pre-open-scanner-main/backend/data/avg_volume_20d.json
+          git commit -m "chore: refresh 20D avg volumes (automated weekly)"
+          git push
