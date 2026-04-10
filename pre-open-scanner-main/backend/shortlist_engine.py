@@ -191,6 +191,10 @@ def evaluate_and_rank(
         avg_liquidity = float(baseline.avg_daily_volume) if baseline else 0.0
         sample_days = int(baseline.sample_days) if baseline else 0
 
+        # Separate historical-only baseline for the displayed 20D avg volume
+        hist_baseline = baseline_store.get_baseline(symbol=symbol, exclude_day=day_key)
+        hist_avg_liquidity = float(hist_baseline.avg_daily_volume) if hist_baseline else 0.0
+
         activity_vs_20d = (activity_proxy / avg_activity) if avg_activity > 0 else 0.0
 
         mandatory_activity = activity_vs_20d >= activity_spike_threshold if avg_activity > 0 else False
@@ -231,7 +235,7 @@ def evaluate_and_rank(
                 "activity_20d_avg": round(avg_activity, 2),
                 "activity_vs_20d": round(activity_vs_20d, 2),
                 "gap_20d_avg": round(avg_gap, 2),
-                "liquidity_20d_avg": round(avg_liquidity, 2),
+                "liquidity_20d_avg": round(hist_avg_liquidity, 2),
                 "baseline_sample_days": sample_days,
                 "mandatory_activity_pass": mandatory_activity,
                 "mandatory_gap_pass": mandatory_gap,
