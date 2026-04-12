@@ -63,6 +63,125 @@ _frozen_shortlist: list[dict] = []
 _frozen_stocks: list[dict] = []
 _hist_volumes: Dict[str, float] = {}
 
+# ---------------------------------------------------------------------------
+# Time-based pre-open volume history (for "20D Avg Vol@Time" column)
+# ---------------------------------------------------------------------------
+_VOLUME_BY_TIME_PATH = _PROJECT_ROOT / "backend" / "data" / "preopen_volume_by_time.json"
+_volume_by_time_history: Dict[str, Dict[str, Dict[str, int]]] = {}   # {date: {time_token: {symbol: volume}}}
+_today_volume_by_time: Dict[str, Dict[str, int]] = {}                 # {time_token: {symbol: volume}}
+_volume_history_persisted_today = False
+_VOLUME_HISTORY_MAX_DAYS = 25  # keep 25 days to ensure 20 trading days
+
+
+def _load_volume_by_time_history() -> Dict:
+    """Load historical pre-open volume-by-time data from disk."""
+    if _VOLUME_BY_TIME_PATH.exists():
+        try:
+            with open(_VOLUME_BY_TIME_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            logger.info("Loaded pre-open volume-by-time history: %d days", len(data))
+            return data
+        except Exception as e:
+            logger.warning("Failed to load volume-by-time history: %s", e)
+    return {}
+
+
+def _save_volume_by_time_history() -> None:
+    """Persist the volume-by-time history to disk, pruning old days."""
+    global _volume_by_time_history
+    # Prune to keep only last N days
+    all_dates = sorted(_volume_by_time_history.keys())
+    if len(all_dates) > _VOLUME_HISTORY_MAX_DAYS:
+        for old_date in all_dates[:-_VOLUME_HISTORY_MAX_DAYS]:
+            del _volume_by_time_history[old_date]
+    try:
+        _VOLUME_BY_TIME_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(_VOLUME_BY_TIME_PATH, "w", encoding="utf-8") as f:
+            json.dump(_volume_by_time_history, f, ensure_ascii=True)
+        logger.info("Saved volume-by-time history (%d days)", len(_volume_by_time_history))
+    except Exception as e:
+        logger.warning("Failed to save volume-by-time history: %s", e)
+
+
+def _record_volume_at_time(time_token: str, stocks: list[dict]) -> None:
+    """Record volume for each stock at the given time token (e.g. '090130')."""
+    global _today_volume_by_time
+    vol_map = {}
+    for s in stocks:
+        sym = (s.get("symbol") or "").strip().upper()
+        vol = s.get("volume", 0)
+        if sym and vol > 0:
+            vol_map[sym] = vol
+    if vol_map:
+        _today_volume_by_time[time_token] = vol_map
+
+
+def _persist_today_volumes() -> None:
+    """Merge today's captured volumes into history and save."""
+    global _volume_by_time_history, _today_volume_by_time, _volume_history_persisted_today
+    if not _today_volume_by_time:
+        return
+    today_str = date.today().isoformat()
+    _volume_by_time_history[today_str] = dict(_today_volume_by_time)
+    _save_volume_by_time_history()
+    _volume_history_persisted_today = True
+    logger.info("Persisted today's volume-by-time data: %d time slots", len(_today_volume_by_time))
+
+
+def _compute_avg_volume_at_time(time_token: str) -> Dict[str, float]:
+    """Compute 20-day average volume at the given time across historical data.
+
+    Finds the closest matching time token (within 60s) for each historical day.
+    Returns {symbol: avg_volume}.
+    """
+    if not _volume_by_time_history:
+        return {}
+
+    today_str = date.today().isoformat()
+    target_seconds = _time_token_to_seconds(time_token)
+
+    # Accumulate volumes per symbol across historical days
+    symbol_totals: Dict[str, float] = {}
+    symbol_counts: Dict[str, int] = {}
+
+    for hist_date, time_map in _volume_by_time_history.items():
+        if hist_date == today_str:
+            continue  # skip today
+        # Find closest time token within 60 seconds
+        best_token = None
+        best_diff = 999999
+        for t in time_map:
+            diff = abs(_time_token_to_seconds(t) - target_seconds)
+            if diff < best_diff:
+                best_diff = diff
+                best_token = t
+        if best_token is None or best_diff > 60:
+            continue
+        for sym, vol in time_map[best_token].items():
+            symbol_totals[sym] = symbol_totals.get(sym, 0.0) + vol
+            symbol_counts[sym] = symbol_counts.get(sym, 0) + 1
+
+    # Compute averages
+    result = {}
+    for sym in symbol_totals:
+        count = symbol_counts[sym]
+        if count > 0:
+            result[sym] = round(symbol_totals[sym] / count)
+    return result
+
+
+def _time_token_to_seconds(token: str) -> int:
+    """Convert a time token like '090130' to seconds since midnight."""
+    try:
+        token = token.strip()
+        if len(token) >= 6:
+            return int(token[:2]) * 3600 + int(token[2:4]) * 60 + int(token[4:6])
+        if len(token) >= 4:
+            return int(token[:2]) * 3600 + int(token[2:4]) * 60
+    except (ValueError, IndexError):
+        pass
+    return 0
+
 _scanner_cfg = _config.get("scanner", {})
 _preopen_freeze_at = str(_scanner_cfg.get("freeze_at", "09:08:00"))
 _dashboard_refresh_seconds = int(_scanner_cfg.get("dashboard_refresh_seconds", 5))
@@ -75,7 +194,7 @@ if os.getenv("DASHBOARD_REFRESH_SECONDS"):
         _dashboard_refresh_seconds = 5
 
 
-def _evaluate_stocks(stocks: list[dict]) -> tuple[list[dict], list[dict]]:
+def _evaluate_stocks(stocks: list[dict], avg_vol_at_time: Dict[str, float] | None = None) -> tuple[list[dict], list[dict]]:
     enriched, shortlist = evaluate_and_rank(
         stocks=stocks,
         baseline_store=_baseline_store,
@@ -89,6 +208,13 @@ def _evaluate_stocks(stocks: list[dict]) -> tuple[list[dict], list[dict]]:
             avg_vol = _hist_volumes.get(sym, 0.0)
             if avg_vol > 0:
                 s["liquidity_20d_avg"] = avg_vol
+    # Inject 20-day avg volume at current time
+    if avg_vol_at_time:
+        for s in enriched:
+            sym = (s.get("symbol") or "").strip().upper()
+            avg_at_t = avg_vol_at_time.get(sym, 0)
+            if avg_at_t > 0:
+                s["avg_vol_at_time"] = avg_at_t
     return enriched, shortlist
 
 
@@ -321,9 +447,18 @@ async def ws_live(websocket: WebSocket):
         if feed:
             data = feed.get_live_data()
             live_stocks = list(data.values())
-            live_stocks, live_shortlist = _evaluate_stocks(live_stocks)
+            # Compute avg vol at current time for initial snapshot
+            ws_status = feed.get_connection_status()
+            ws_key = ws_status.get("last_redis_key") or ""
+            ws_time_token = ""
+            if ws_key and ":" in ws_key:
+                ws_parts = ws_key.split(":")
+                if len(ws_parts) >= 3:
+                    ws_time_token = ws_parts[2]
+            ws_avg_vol = _compute_avg_volume_at_time(ws_time_token) if ws_time_token else {}
+            live_stocks, live_shortlist = _evaluate_stocks(live_stocks, avg_vol_at_time=ws_avg_vol)
             stocks, shortlist, is_frozen, freeze_message = _resolve_dashboard_window(live_stocks, live_shortlist)
-            status_info = feed.get_connection_status()
+            status_info = ws_status
             gainers = sum(1 for s in stocks if (s.get("iep_gap_pct") or 0) > 0)
             losers = sum(1 for s in stocks if (s.get("iep_gap_pct") or 0) < 0)
             high_alerts = sum(1 for s in stocks if s.get("alert_level") == "HIGH")
@@ -396,6 +531,7 @@ async def broadcast_loop():
     last_broadcast_key: str | None = None
     last_snapshot_count: int | None = None
     last_frozen_state: bool | None = None
+    last_recorded_time_token: str | None = None
 
     while True:
         try:
@@ -405,10 +541,38 @@ async def broadcast_loop():
 
             data = feed.get_live_data()
             live_stocks = list(data.values())
-            live_stocks, live_shortlist = _evaluate_stocks(live_stocks)
+
+            # --- Time-based volume capture & avg computation ---
+            status_info_pre = feed.get_connection_status()
+            current_key_pre = status_info_pre.get("last_redis_key") or ""
+            now_str = datetime.now().strftime("%H:%M:%S")
+            avg_vol_at_time: Dict[str, float] = {}
+
+            # Extract time token from redis key (e.g. "preopen:20260412:090130" -> "090130")
+            time_token = ""
+            if current_key_pre and ":" in current_key_pre:
+                parts = current_key_pre.split(":")
+                if len(parts) >= 3:
+                    time_token = parts[2]
+
+            # During pre-open (9:00-9:08), record volume at each new time token
+            if "09:00:00" <= now_str <= _preopen_freeze_at and time_token and time_token != last_recorded_time_token:
+                _record_volume_at_time(time_token, live_stocks)
+                last_recorded_time_token = time_token
+
+            # At freeze time, persist today's volumes (once)
+            global _volume_history_persisted_today
+            if now_str > _preopen_freeze_at and not _volume_history_persisted_today and _today_volume_by_time:
+                _persist_today_volumes()
+
+            # Compute 20D avg volume at current time token
+            if time_token:
+                avg_vol_at_time = _compute_avg_volume_at_time(time_token)
+
+            live_stocks, live_shortlist = _evaluate_stocks(live_stocks, avg_vol_at_time=avg_vol_at_time)
             stocks, shortlist, is_frozen, freeze_message = _resolve_dashboard_window(live_stocks, live_shortlist)
-            status_info = feed.get_connection_status()
-            current_key = status_info.get("last_redis_key")
+            status_info = status_info_pre
+            current_key = current_key_pre
             current_snapshot_count = int(status_info.get("snapshot_count") or 0)
 
             key_changed = bool(current_key and current_key != last_broadcast_key)
@@ -495,6 +659,11 @@ async def startup():
         "RedisDataFeed started (mock_mode=%s, symbols=%d)",
         mock_mode, len(symbols)
     )
+
+    # Load time-based volume history for "20D Avg Vol@Time"
+    global _volume_by_time_history, _volume_history_persisted_today
+    _volume_by_time_history = _load_volume_by_time_history()
+    _volume_history_persisted_today = False
 
     # Fetch 20-day average market volumes from Yahoo Finance
     global _hist_volumes

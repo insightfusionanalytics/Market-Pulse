@@ -34,6 +34,7 @@ export interface Stock {
   // ── Phase B (future — not yet active) ────────────────────────────────────
   avg_vol_20d?: number;
   vol_spike_ratio?: number;
+  avg_vol_at_time?: number; // 20-day avg pre-open volume at same time
 
   // ── Rule-based shortlist fields ───────────────────────────────────────────
   preopen_activity_metric?: number;
