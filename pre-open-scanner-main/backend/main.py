@@ -65,42 +65,82 @@ _hist_volumes: Dict[str, float] = {}
 
 # ---------------------------------------------------------------------------
 # Time-based pre-open volume history (for "20D Avg Vol@Time" column)
+# Uses a SEPARATE Redis DB (DB 4) to avoid any risk to existing data on DB 3.
+# Only ONE key is used: "marketpulse:volume_history"
+# Operations: GET on startup, SET at freeze time. Nothing else.
 # ---------------------------------------------------------------------------
-_VOLUME_BY_TIME_PATH = _PROJECT_ROOT / "backend" / "data" / "preopen_volume_by_time.json"
+import redis as _redis_lib
+
+_VOLUME_HISTORY_REDIS_DB = int(os.getenv("VOLUME_HISTORY_REDIS_DB", "4"))
+_VOLUME_HISTORY_REDIS_KEY = "marketpulse:volume_history"
 _volume_by_time_history: Dict[str, Dict[str, Dict[str, int]]] = {}   # {date: {time_token: {symbol: volume}}}
 _today_volume_by_time: Dict[str, Dict[str, int]] = {}                 # {time_token: {symbol: volume}}
 _volume_history_persisted_today = False
 _VOLUME_HISTORY_MAX_DAYS = 25  # keep 25 days to ensure 20 trading days
 
 
+def _get_volume_history_redis():
+    """Create a dedicated Redis connection to DB 4 (separate from feed DB 3)."""
+    try:
+        from redis_feed import REDIS_HOST, REDIS_PORT, REDIS_PASSWORD
+        r = _redis_lib.Redis(
+            host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD,
+            db=_VOLUME_HISTORY_REDIS_DB,
+            decode_responses=True,
+            socket_connect_timeout=5, socket_timeout=5,
+        )
+        r.ping()
+        return r
+    except Exception as e:
+        logger.warning("Volume history Redis connect failed (DB %d): %s", _VOLUME_HISTORY_REDIS_DB, e)
+        return None
+
+
 def _load_volume_by_time_history() -> Dict:
-    """Load historical pre-open volume-by-time data from disk."""
-    if _VOLUME_BY_TIME_PATH.exists():
-        try:
-            with open(_VOLUME_BY_TIME_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            logger.info("Loaded pre-open volume-by-time history: %d days", len(data))
+    """Load historical pre-open volume-by-time data from Redis DB 4."""
+    r = _get_volume_history_redis()
+    if r is None:
+        return {}
+    try:
+        raw = r.get(_VOLUME_HISTORY_REDIS_KEY)
+        if raw:
+            data = json.loads(raw)
+            logger.info("Loaded pre-open volume-by-time history from Redis DB %d: %d days", _VOLUME_HISTORY_REDIS_DB, len(data))
             return data
-        except Exception as e:
-            logger.warning("Failed to load volume-by-time history: %s", e)
-    return {}
+        logger.info("No volume-by-time history in Redis DB %d yet (key: %s)", _VOLUME_HISTORY_REDIS_DB, _VOLUME_HISTORY_REDIS_KEY)
+        return {}
+    except Exception as e:
+        logger.warning("Failed to load volume-by-time history from Redis: %s", e)
+        return {}
+    finally:
+        try:
+            r.close()
+        except Exception:
+            pass
 
 
 def _save_volume_by_time_history() -> None:
-    """Persist the volume-by-time history to disk, pruning old days."""
+    """Persist the volume-by-time history to Redis DB 4 (one key only)."""
     global _volume_by_time_history
     # Prune to keep only last N days
     all_dates = sorted(_volume_by_time_history.keys())
     if len(all_dates) > _VOLUME_HISTORY_MAX_DAYS:
         for old_date in all_dates[:-_VOLUME_HISTORY_MAX_DAYS]:
             del _volume_by_time_history[old_date]
+    r = _get_volume_history_redis()
+    if r is None:
+        logger.warning("Cannot save volume-by-time history: Redis DB %d unavailable", _VOLUME_HISTORY_REDIS_DB)
+        return
     try:
-        _VOLUME_BY_TIME_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(_VOLUME_BY_TIME_PATH, "w", encoding="utf-8") as f:
-            json.dump(_volume_by_time_history, f, ensure_ascii=True)
-        logger.info("Saved volume-by-time history (%d days)", len(_volume_by_time_history))
+        r.set(_VOLUME_HISTORY_REDIS_KEY, json.dumps(_volume_by_time_history, ensure_ascii=True))
+        logger.info("Saved volume-by-time history to Redis DB %d (%d days)", _VOLUME_HISTORY_REDIS_DB, len(_volume_by_time_history))
     except Exception as e:
-        logger.warning("Failed to save volume-by-time history: %s", e)
+        logger.warning("Failed to save volume-by-time history to Redis: %s", e)
+    finally:
+        try:
+            r.close()
+        except Exception:
+            pass
 
 
 def _record_volume_at_time(time_token: str, stocks: list[dict]) -> None:
