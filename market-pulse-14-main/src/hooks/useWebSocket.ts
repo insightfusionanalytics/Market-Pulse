@@ -1,11 +1,35 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { getWebSocketUrl, clearToken } from "@/lib/api";
+import { getWebSocketUrl, getToken, clearToken } from "@/lib/api";
 import { Stock, WebSocketMessage } from "@/types";
 
 const MAX_RECONNECT_ATTEMPTS = 5;
 const RECONNECT_INTERVAL = 5000;
 const PING_INTERVAL = 30000;
 const THROTTLE_MS = 200; // Max 5 UI updates per second
+const TOKEN_EXPIRY_BUFFER_MS = 60_000;
+
+// Returns true if the JWT is missing, malformed, or within 60s of expiry.
+// We can't decode the signature client-side, but the exp claim is plain JSON
+// in the second segment so we can read it safely.
+function isTokenExpired(token: string | null): boolean {
+  if (!token) return true;
+  const parts = token.split(".");
+  if (parts.length !== 3) return true;
+  try {
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+    if (typeof payload.exp !== "number") return false;
+    return Date.now() >= payload.exp * 1000 - TOKEN_EXPIRY_BUFFER_MS;
+  } catch {
+    return true;
+  }
+}
+
+function redirectToLogin(): void {
+  clearToken();
+  if (typeof window !== "undefined" && window.location.pathname !== "/") {
+    window.location.href = "/";
+  }
+}
 
 export function useWebSocket(enabled: boolean, refreshIntervalSeconds: number) {
   const [stocks, setStocks] = useState<Stock[]>([]);
@@ -69,11 +93,23 @@ export function useWebSocket(enabled: boolean, refreshIntervalSeconds: number) {
 
   const connect = useCallback(() => {
     cleanup();
+
+    // Pre-flight: if the token is already expired, don't even attempt the WS
+    // handshake — it will be rejected with HTTP 403 and the browser will fire
+    // onclose with code=1006 (which we cannot reliably distinguish from a
+    // network blip). Redirect to login instead so the user gets a fresh token.
+    if (isTokenExpired(getToken())) {
+      redirectToLogin();
+      return;
+    }
+
+    let openedSuccessfully = false;
     const url = getWebSocketUrl();
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
+      openedSuccessfully = true;
       setConnected(true);
       reconnectCount.current = 0;
       pingTimer.current = setInterval(() => {
@@ -98,9 +134,16 @@ export function useWebSocket(enabled: boolean, refreshIntervalSeconds: number) {
       setConnected(false);
       if (pingTimer.current) clearInterval(pingTimer.current);
 
-      if (event.code === 4001 || event.reason?.includes("auth")) {
-        clearToken();
-        window.location.href = "/";
+      // Explicit auth-fail close from server, OR handshake never succeeded
+      // (browser fires code=1006 when server rejects the upgrade with HTTP
+      // 403 — the most common cause is an expired/invalid JWT).
+      const handshakeFailed = !openedSuccessfully && event.code !== 1000;
+      if (
+        event.code === 4001 ||
+        event.reason?.includes("auth") ||
+        (handshakeFailed && isTokenExpired(getToken()))
+      ) {
+        redirectToLogin();
         return;
       }
 
