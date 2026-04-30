@@ -131,40 +131,42 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       {/* ── Topbar ────────────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 flex items-center justify-between px-5 lg:px-8 py-3 bg-background/80 backdrop-blur-md border-b border-border">
-        <div className="flex items-center gap-4">
-          <h1 className="text-primary font-bold text-lg tracking-tight">MarketPulse</h1>
+      <div className="sticky top-0 z-30 flex items-center justify-between gap-2 px-3 sm:px-3 sm:px-5 lg:px-8 py-3 bg-background/80 backdrop-blur-md border-b border-border">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <h1 className="text-primary font-bold text-base sm:text-lg tracking-tight">MarketPulse</h1>
           {sessionStatus && (
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${sessionStatus.bg} ${sessionStatus.color}`}>
+            <span className={`text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full border whitespace-nowrap ${sessionStatus.bg} ${sessionStatus.color}`}>
               {sessionStatus.text}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-5">
-          <span className="text-muted-foreground text-sm font-mono tabular-nums">{istTime} IST</span>
+        <div className="flex items-center gap-2 sm:gap-5">
+          <span className="hidden sm:inline text-muted-foreground text-sm font-mono tabular-nums">{istTime} IST</span>
+          <span className="sm:hidden text-muted-foreground text-[11px] font-mono tabular-nums">{istTime.slice(0, 5)}</span>
           <div className="flex items-center gap-1.5">
             {connected ? (
               <Wifi size={14} className="text-success animate-pulse-dot" />
             ) : (
               <WifiOff size={14} className="text-destructive" />
             )}
-            <span className={`text-xs font-medium ${connected ? "text-success" : "text-destructive"}`}>
+            <span className={`hidden sm:inline text-xs font-medium ${connected ? "text-success" : "text-destructive"}`}>
               {connected ? "Live" : "Offline"}
             </span>
           </div>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border px-2.5 py-1.5 rounded-md transition-colors hover:bg-secondary"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border px-2 sm:px-2.5 py-1.5 rounded-md transition-colors hover:bg-secondary"
+            aria-label="Logout"
           >
             <LogOut size={12} />
-            Logout
+            <span className="hidden sm:inline">Logout</span>
           </button>
         </div>
       </div>
 
       {/* Stale snapshot warning */}
       {showStaleBanner && isPreopen && (
-        <div className="flex items-center gap-2 px-5 lg:px-8 py-2 bg-amber-900/30 border-b border-amber-700/40 text-amber-300 text-sm">
+        <div className="flex items-center gap-2 px-3 sm:px-5 lg:px-8 py-2 bg-amber-900/30 border-b border-amber-700/40 text-amber-300 text-sm">
           <AlertTriangle size={15} className="shrink-0 text-amber-400" />
           <span>
             <strong>First snapshot (9:00 AM)</strong> — Data may reflect previous day carry-forward prices.
@@ -182,7 +184,7 @@ export default function Dashboard() {
       {/* ── Main content ─────────────────────────────────────────────────── */}
       <div className="max-w-[1920px] mx-auto w-full flex flex-col flex-1">
         {/* Stats cards */}
-        <div className="px-5 lg:px-8 pt-5 pb-4">
+        <div className="px-3 sm:px-5 lg:px-8 pt-5 pb-4">
           <StatsCards
             stocks={stocks}
             lastUpdate={lastUpdate}
@@ -193,7 +195,7 @@ export default function Dashboard() {
         </div>
 
         {/* Controls bar */}
-        <div className="px-5 lg:px-8 pb-4">
+        <div className="px-3 sm:px-5 lg:px-8 pb-4">
           <ControlsBar
             sortBy={sortBy}
             setSortBy={setSortBy}
@@ -212,18 +214,18 @@ export default function Dashboard() {
         </div>
 
         {/* Shortlist table */}
-        <div className="px-5 lg:px-8 pb-4">
+        <div className="px-3 sm:px-5 lg:px-8 pb-4">
           <ShortlistTable stocks={shortlist} isFrozen={isFrozen} freezeMessage={freezeMessage} />
         </div>
 
         {/* History panel */}
-        <div className="px-5 lg:px-8 pb-4">
+        <div className="px-3 sm:px-5 lg:px-8 pb-4">
           <HistoryPanel />
         </div>
 
         {/* Watchlist info strip */}
         {isMultiSymbol && (
-          <div className="flex items-center gap-2 px-5 lg:px-8 py-2 bg-primary/5 border-y border-primary/15 text-primary text-xs">
+          <div className="flex items-center gap-2 px-3 sm:px-5 lg:px-8 py-2 bg-primary/5 border-y border-primary/15 text-primary text-xs">
             <Clock size={12} />
             <span>
               Watchlist mode — showing {displayed.length} / {parsedSymbols.length} symbols
@@ -237,7 +239,7 @@ export default function Dashboard() {
         )}
 
         {isSingleSymbol && (
-          <div className="flex items-center gap-2 px-5 lg:px-8 py-2 bg-primary/5 border-y border-primary/15 text-primary text-xs">
+          <div className="flex items-center gap-2 px-3 sm:px-5 lg:px-8 py-2 bg-primary/5 border-y border-primary/15 text-primary text-xs">
             <Clock size={12} />
             <span>
               Filtering by "{parsedSymbols[0]}" — {displayed.length} result{displayed.length !== 1 ? "s" : ""}
@@ -246,7 +248,7 @@ export default function Dashboard() {
         )}
 
         {/* Main table */}
-        <div className="flex-1 overflow-auto px-5 lg:px-8 pb-5">
+        <div className="flex-1 overflow-auto px-3 sm:px-5 lg:px-8 pb-5">
           <StockTable stocks={displayed} loading={!connected && stocks.length === 0} searchQuery={searchQuery} />
         </div>
       </div>

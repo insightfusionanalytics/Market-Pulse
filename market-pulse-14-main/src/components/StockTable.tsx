@@ -65,6 +65,120 @@ function BSRatioBar({ ratio }: { ratio: number }) {
   );
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Mobile-only: each stock as a card. Shows the headline info big and clear,
+// all the secondary data in a smaller grid. Designed for one-handed scanning
+// on a phone — the most important question (which stocks gapped the most?)
+// is answered without horizontal scrolling.
+// ────────────────────────────────────────────────────────────────────────────
+const MobileStockCard = React.memo(({ stock, rank }: { stock: Stock; rank: number }) => {
+  const gapPct = stock.iep_gap_pct ?? 0;
+  const isGainer = gapPct > 0;
+  const isLoser = gapPct < 0;
+  const isHighlight = stock.alert_level === "HIGH";
+  const gapColor = isGainer ? "text-success" : isLoser ? "text-destructive" : "text-muted-foreground";
+  const bsRatio = stock.bs_ratio ?? 0;
+
+  return (
+    <div
+      className={`rounded-lg border bg-card p-3 transition-colors ${
+        isHighlight
+          ? isGainer
+            ? "border-success/30 bg-success/[0.03]"
+            : "border-destructive/30 bg-destructive/[0.03]"
+          : "border-border"
+      }`}
+    >
+      {/* Header row: rank + symbol + signal */}
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[11px] text-muted-foreground font-mono tabular-nums shrink-0">#{rank}</span>
+          {stock.flagged && (
+            <span className="text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1 rounded font-bold shrink-0">!</span>
+          )}
+          <span className="font-semibold text-foreground text-base truncate">{extractSymbolName(stock.symbol)}</span>
+        </div>
+        <SignalBadge signal={stock.signal ?? "NEUTRAL"} />
+      </div>
+
+      {/* Headline numbers: gap % (huge) + IEP */}
+      <div className="flex items-end justify-between gap-3 mb-2.5 px-1">
+        <div className={`text-2xl font-bold font-mono tabular-nums ${gapColor}`}>
+          {gapPct != null ? `${gapPct > 0 ? "+" : ""}${gapPct.toFixed(2)}%` : "–"}
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">IEP</div>
+          <div className="text-base font-mono font-semibold text-foreground tabular-nums">
+            {stock.iep > 0 ? formatCurrency(stock.iep) : "–"}
+          </div>
+        </div>
+      </div>
+
+      {/* Secondary: gap ₹ and prev close */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-border/50 pt-2 mb-2">
+        <span className="font-mono tabular-nums">
+          Gap{" "}
+          <span className={`font-medium ${gapColor}`}>
+            {stock.iep_gap_inr != null ? `${stock.iep_gap_inr > 0 ? "+" : ""}${formatCurrency(stock.iep_gap_inr)}` : "–"}
+          </span>
+        </span>
+        <span className="font-mono tabular-nums">
+          Prev <span className="text-foreground">{formatCurrency(stock.prev_close)}</span>
+        </span>
+      </div>
+
+      {/* B/S Ratio + Volume */}
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-md bg-secondary/30 px-2.5 py-1.5">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">B/S Ratio</div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span
+              className={`font-mono font-semibold tabular-nums ${
+                bsRatio < 0.5 ? "text-destructive" : bsRatio > 1.5 ? "text-success" : "text-foreground"
+              }`}
+            >
+              {stock.bs_ratio != null ? stock.bs_ratio.toFixed(2) : "–"}
+            </span>
+            {stock.bs_ratio != null && <BSRatioBar ratio={stock.bs_ratio} />}
+          </div>
+        </div>
+        <div className="rounded-md bg-secondary/30 px-2.5 py-1.5">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Volume</div>
+          <div className="font-mono font-semibold text-foreground tabular-nums mt-0.5">
+            {stock.volume > 0 ? formatLargeNumber(stock.volume) : "–"}
+          </div>
+        </div>
+      </div>
+
+      {/* Buy/Sell qty + 20D context */}
+      <div className="grid grid-cols-3 gap-2 mt-2 text-[11px]">
+        <div>
+          <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Buy Qty</div>
+          <div className="font-mono tabular-nums text-foreground">{formatLargeNumber(stock.buy_qty)}</div>
+        </div>
+        <div>
+          <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Sell Qty</div>
+          <div className="font-mono tabular-nums text-foreground">{formatLargeNumber(stock.sell_qty)}</div>
+        </div>
+        <div>
+          <div className="text-[9px] uppercase tracking-wider text-muted-foreground">20D Vol</div>
+          <div className="font-mono tabular-nums text-foreground">
+            {stock.liquidity_20d_avg && stock.liquidity_20d_avg > 0 ? formatLargeNumber(stock.liquidity_20d_avg) : "–"}
+          </div>
+        </div>
+      </div>
+
+      {/* Updated time */}
+      {stock.last_updated && (
+        <div className="text-[10px] font-mono text-muted-foreground text-right mt-2">
+          Updated {stock.last_updated}
+        </div>
+      )}
+    </div>
+  );
+});
+MobileStockCard.displayName = "MobileStockCard";
+
 const StockRow = React.memo(({ stock, rank }: { stock: Stock; rank: number }) => {
   const gapPct = stock.iep_gap_pct ?? 0;
   const isGainer = gapPct > 0;
@@ -213,47 +327,61 @@ const StockTable: React.FC<StockTableProps> = ({ stocks, loading, searchQuery })
     });
   }, [stocks, sortConfig.key, sortConfig.direction]);
 
-  // Loading skeleton
+  // Loading skeleton — both desktop and mobile
   if (loading && stocks.length === 0) {
     return (
-      <div className="rounded-lg border border-border overflow-hidden bg-card">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-secondary/30 border-b border-border">
-              {COLUMNS.map((c) => (
-                <th key={c.label} className={`px-3 py-2.5 text-[11px] uppercase tracking-wider text-muted-foreground font-medium ${c.align}`}>
-                  {c.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: 10 }).map((_, i) => (
-              <tr key={i} className="border-b border-border/50">
-                {COLUMNS.map((_, j) => (
-                  <td key={j} className="px-3 py-2">
-                    <Skeleton className="h-4 w-full bg-muted/50" />
-                  </td>
+      <>
+        {/* Desktop skeleton */}
+        <div className="hidden md:block rounded-lg border border-border overflow-hidden bg-card">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-secondary/30 border-b border-border">
+                {COLUMNS.map((c) => (
+                  <th key={c.label} className={`px-3 py-2.5 text-[11px] uppercase tracking-wider text-muted-foreground font-medium ${c.align}`}>
+                    {c.label}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {Array.from({ length: 10 }).map((_, i) => (
+                <tr key={i} className="border-b border-border/50">
+                  {COLUMNS.map((_, j) => (
+                    <td key={j} className="px-3 py-2">
+                      <Skeleton className="h-4 w-full bg-muted/50" />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {/* Mobile skeleton */}
+        <div className="md:hidden space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-lg border border-border bg-card p-3 space-y-2">
+              <Skeleton className="h-4 w-1/2 bg-muted/50" />
+              <Skeleton className="h-7 w-1/3 bg-muted/50" />
+              <Skeleton className="h-3 w-full bg-muted/50" />
+              <Skeleton className="h-10 w-full bg-muted/50" />
+            </div>
+          ))}
+        </div>
+      </>
     );
   }
 
-  // Empty state
+  // Empty state — single component, naturally responsive
   if (stocks.length === 0 && !loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-muted-foreground rounded-lg border border-border bg-card">
+      <div className="flex flex-col items-center justify-center py-12 sm:py-20 px-4 text-muted-foreground rounded-lg border border-border bg-card">
         {searchQuery ? (
-          <p className="text-base">No stocks match "{searchQuery}"</p>
+          <p className="text-sm sm:text-base text-center">No stocks match "{searchQuery}"</p>
         ) : (
           <>
             <Loader2 className="h-8 w-8 animate-spin mb-3 text-primary" />
-            <p className="text-base font-medium">Waiting for pre-open data...</p>
-            <p className="text-sm mt-1 text-muted-foreground">Live data streams 9:00–9:07 AM IST</p>
+            <p className="text-sm sm:text-base font-medium text-center">Waiting for pre-open data...</p>
+            <p className="text-xs sm:text-sm mt-1 text-muted-foreground text-center">Live data streams 9:00–9:07 AM IST</p>
           </>
         )}
       </div>
@@ -261,39 +389,49 @@ const StockTable: React.FC<StockTableProps> = ({ stocks, loading, searchQuery })
   }
 
   return (
-    <div className="rounded-lg border border-border overflow-auto bg-card">
-      <table className="w-full">
-        <thead className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
-          <tr className="border-b border-border">
-            {COLUMNS.map((col) => (
-              <th
-                key={col.label}
-                onClick={col.sortKey ? () => handleSort(col.sortKey!) : undefined}
-                className={`px-3 py-2.5 text-[11px] uppercase tracking-wider font-medium whitespace-nowrap ${col.align} ${
-                  col.sortKey
-                    ? "cursor-pointer hover:bg-secondary/50 transition-colors select-none text-muted-foreground hover:text-foreground"
-                    : "text-muted-foreground"
-                } ${sortConfig.key === col.sortKey ? "text-primary" : ""}`}
-              >
-                <span className="inline-flex items-center gap-1">
-                  {col.label}
-                  {col.sortKey && sortConfig.key === col.sortKey && (
-                    sortConfig.direction === "desc"
-                      ? <ChevronDown size={12} className="text-primary" />
-                      : <ChevronUp size={12} className="text-primary" />
-                  )}
-                </span>
-              </th>
+    <>
+      {/* ── DESKTOP: full table (≥ md / 768px) ──────────────────────────── */}
+      <div className="hidden md:block rounded-lg border border-border overflow-auto bg-card">
+        <table className="w-full">
+          <thead className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
+            <tr className="border-b border-border">
+              {COLUMNS.map((col) => (
+                <th
+                  key={col.label}
+                  onClick={col.sortKey ? () => handleSort(col.sortKey!) : undefined}
+                  className={`px-3 py-2.5 text-[11px] uppercase tracking-wider font-medium whitespace-nowrap ${col.align} ${
+                    col.sortKey
+                      ? "cursor-pointer hover:bg-secondary/50 transition-colors select-none text-muted-foreground hover:text-foreground"
+                      : "text-muted-foreground"
+                  } ${sortConfig.key === col.sortKey ? "text-primary" : ""}`}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {col.label}
+                    {col.sortKey && sortConfig.key === col.sortKey && (
+                      sortConfig.direction === "desc"
+                        ? <ChevronDown size={12} className="text-primary" />
+                        : <ChevronUp size={12} className="text-primary" />
+                    )}
+                  </span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedStocks.map((stock, index) => (
+              <StockRow key={stock.symbol} stock={stock} rank={index + 1} />
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {sortedStocks.map((stock, index) => (
-            <StockRow key={stock.symbol} stock={stock} rank={index + 1} />
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── MOBILE: stacked cards (< md / 768px) ─────────────────────────── */}
+      <div className="md:hidden space-y-2">
+        {sortedStocks.map((stock, index) => (
+          <MobileStockCard key={stock.symbol} stock={stock} rank={index + 1} />
+        ))}
+      </div>
+    </>
   );
 };
 

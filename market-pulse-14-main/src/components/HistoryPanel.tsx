@@ -93,20 +93,20 @@ function HistoryPanel() {
 
       {/* Expandable content */}
       {isOpen && (
-        <div className="border-t border-border px-4 py-3 space-y-3">
+        <div className="border-t border-border px-3 sm:px-4 py-3 space-y-3">
           {/* Save now button */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <Button
               onClick={handleSaveNow}
               disabled={saving}
               variant="outline"
               size="sm"
-              className="h-8 text-xs"
+              className="h-9 sm:h-8 text-xs w-full sm:w-auto"
             >
               <Save size={14} className="mr-1" />
               {saving ? "Saving..." : "Save Current Snapshot"}
             </Button>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-[11px] sm:text-xs text-muted-foreground">
               Auto-saves daily at 9:10 AM IST
             </span>
           </div>
