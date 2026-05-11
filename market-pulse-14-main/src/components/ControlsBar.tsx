@@ -56,6 +56,8 @@ const ControlsBar: React.FC<ControlsBarProps> = ({
         <option value="buy_qty">Buy Qty</option>
         <option value="sell_qty">Sell Qty</option>
         <option value="volume">Volume</option>
+        <option value="avg_vol_at_time">20D Vol@Time</option>
+        <option value="liquidity_20d_avg">20D Avg Vol</option>
       </select>
     </div>
   );

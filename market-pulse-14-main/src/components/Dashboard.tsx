@@ -249,7 +249,17 @@ export default function Dashboard() {
 
         {/* Main table */}
         <div className="flex-1 overflow-auto px-3 sm:px-5 lg:px-8 pb-5">
-          <StockTable stocks={displayed} loading={!connected && stocks.length === 0} searchQuery={searchQuery} />
+          <StockTable
+            stocks={displayed}
+            loading={!connected && stocks.length === 0}
+            searchQuery={searchQuery}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            onSortChange={(field, order) => {
+              setSortBy(field);
+              setSortOrder(order);
+            }}
+          />
         </div>
       </div>
 

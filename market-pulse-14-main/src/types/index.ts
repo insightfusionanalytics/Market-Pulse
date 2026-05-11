@@ -88,6 +88,8 @@ export type SortField =
   | "buy_qty"
   | "sell_qty"
   | "volume"
+  | "liquidity_20d_avg"
+  | "avg_vol_at_time"
   | "change_pct" // compat alias
   | "ltp" // compat alias
   | "proxy_vol"; // compat alias

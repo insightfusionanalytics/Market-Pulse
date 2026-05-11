@@ -1,16 +1,25 @@
-import React, { useState, useMemo } from "react";
+import React from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Stock } from "@/types";
+import { Stock, SortField, SortOrder } from "@/types";
 import { formatCurrency, formatLargeNumber, extractSymbolName } from "@/lib/formatters";
 import { Loader2, ChevronUp, ChevronDown } from "lucide-react";
 
-type SortKey = "iep" | "prev_close" | "iep_gap_inr" | "iep_gap_pct" | "buy_qty" | "sell_qty" | "bs_ratio" | "volume" | "liquidity_20d_avg" | "avg_vol_at_time";
-type SortDirection = "asc" | "desc";
+// Subset of SortField that actually has clickable column headers in this table.
+type SortKey = Extract<
+  SortField,
+  "iep" | "iep_gap_inr" | "iep_gap_pct" | "buy_qty" | "sell_qty" | "bs_ratio" | "volume" | "liquidity_20d_avg" | "avg_vol_at_time"
+>;
 
 interface StockTableProps {
   stocks: Stock[];
   loading: boolean;
   searchQuery: string;
+  // Sort state lives in the parent (Dashboard) so column-header clicks change
+  // the same sort that the ControlsBar dropdown controls — clicking "Buy Qty"
+  // re-picks the top 50 from all 500 stocks, not just reorder the visible 50.
+  sortBy: SortField;
+  sortOrder: SortOrder;
+  onSortChange: (field: SortField, order: SortOrder) => void;
 }
 
 function SignalBadge({ signal }: { signal: string }) {
@@ -305,27 +314,17 @@ const COLUMNS: { label: string; sortKey: SortKey | null; align: string }[] = [
   { label: "Updated", sortKey: null, align: "text-right" },
 ];
 
-const StockTable: React.FC<StockTableProps> = ({ stocks, loading, searchQuery }) => {
-  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
-    key: "iep_gap_pct",
-    direction: "desc",
-  });
-
+const StockTable: React.FC<StockTableProps> = ({ stocks, loading, searchQuery, sortBy, sortOrder, onSortChange }) => {
+  // Click handler for column headers. Toggles direction if the same column is
+  // clicked again, otherwise switches to the new column at "desc". Calls the
+  // parent's onSortChange so the Dashboard's filtering/limiting pipeline picks
+  // a fresh top-N from the full data set — that's what the user expects.
   const handleSort = (key: SortKey) => {
-    setSortConfig((prev) => ({
-      key,
-      direction: prev.key === key ? (prev.direction === "desc" ? "asc" : "desc") : "desc",
-    }));
+    const nextOrder: SortOrder = sortBy === key ? (sortOrder === "desc" ? "asc" : "desc") : "desc";
+    onSortChange(key, nextOrder);
   };
 
-  const sortedStocks = useMemo(() => {
-    return [...stocks].sort((a, b) => {
-      const aVal = (a as any)[sortConfig.key] ?? 0;
-      const bVal = (b as any)[sortConfig.key] ?? 0;
-      const diff = (aVal as number) - (bVal as number);
-      return sortConfig.direction === "desc" ? -diff : diff;
-    });
-  }, [stocks, sortConfig.key, sortConfig.direction]);
+  // Stocks already arrive in the correct order from Dashboard — don't re-sort.
 
   // Loading skeleton — both desktop and mobile
   if (loading && stocks.length === 0) {
@@ -403,12 +402,12 @@ const StockTable: React.FC<StockTableProps> = ({ stocks, loading, searchQuery })
                     col.sortKey
                       ? "cursor-pointer hover:bg-secondary/50 transition-colors select-none text-muted-foreground hover:text-foreground"
                       : "text-muted-foreground"
-                  } ${sortConfig.key === col.sortKey ? "text-primary" : ""}`}
+                  } ${col.sortKey && sortBy === col.sortKey ? "text-primary" : ""}`}
                 >
                   <span className="inline-flex items-center gap-1">
                     {col.label}
-                    {col.sortKey && sortConfig.key === col.sortKey && (
-                      sortConfig.direction === "desc"
+                    {col.sortKey && sortBy === col.sortKey && (
+                      sortOrder === "desc"
                         ? <ChevronDown size={12} className="text-primary" />
                         : <ChevronUp size={12} className="text-primary" />
                     )}
@@ -418,7 +417,7 @@ const StockTable: React.FC<StockTableProps> = ({ stocks, loading, searchQuery })
             </tr>
           </thead>
           <tbody>
-            {sortedStocks.map((stock, index) => (
+            {stocks.map((stock, index) => (
               <StockRow key={stock.symbol} stock={stock} rank={index + 1} />
             ))}
           </tbody>
@@ -427,7 +426,7 @@ const StockTable: React.FC<StockTableProps> = ({ stocks, loading, searchQuery })
 
       {/* ── MOBILE: stacked cards (< md / 768px) ─────────────────────────── */}
       <div className="md:hidden space-y-2">
-        {sortedStocks.map((stock, index) => (
+        {stocks.map((stock, index) => (
           <MobileStockCard key={stock.symbol} stock={stock} rank={index + 1} />
         ))}
       </div>
